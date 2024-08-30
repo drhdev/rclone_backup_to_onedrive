@@ -71,7 +71,7 @@ os.environ["HOME"] = USER_HOME
 os.environ["PATH"] = USER_PATH
 
 # Set up logging
-log_filename = 'logfile_rclone_backup_to_onedrive.log'
+log_filename = 'rclone_backup_to_onedrive.log'
 logger = logging.getLogger('rclone_backup_to_onedrive')
 logger.setLevel(logging.DEBUG)
 handler = RotatingFileHandler(log_filename, maxBytes=5*1024*1024, backupCount=5)
