@@ -3,7 +3,7 @@
 Script Name: rclone_backup_to_onedrive.py
 Author: drhdev
 URI: https://github.com/drhdev/rclone_backup_to_onedrive/
-Version: 1.0.1
+Version: 1.0.2
 License: GPL v3
 
 Description:
@@ -59,16 +59,20 @@ import logging
 from logging.handlers import RotatingFileHandler
 import time
 
-# Configuration variables
-USER_HOME = os.path.expanduser("~")
-USER_PATH = os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin")
-RCLONE_CONFIG_PATH = os.path.join(USER_HOME, ".config/rclone/rclone.conf")
+############################
+# CONFIGURATION VARIABLES  #
+############################
 
-# Environment setup
+# User-configurable settings
+USER_HOME = os.path.expanduser("~")  # Dynamically get the current user's home directory
+USER_PATH = os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin")  # User's PATH
+RCLONE_CONFIG_PATH = os.path.join(USER_HOME, ".config/rclone/rclone.conf")  # Path to rclone config file
+
+# Set environment variables for the script
 os.environ["HOME"] = USER_HOME
 os.environ["PATH"] = USER_PATH
 
-# Logging setup
+# Set up logging
 log_filename = 'rclone_backup_to_onedrive.log'
 logger = logging.getLogger('rclone_backup_to_onedrive')
 logger.setLevel(logging.DEBUG)
@@ -77,27 +81,40 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
-# Backup source and destination configuration
+# Log environment variables for debugging
+logger.info(f"Environment variables: {os.environ}")
+
+# Backup Sources Configuration
 BACKUP_PATHS = {
-    "/home": True,
-    "/var/www": True,
-    "/usr/local/bin": True,
+    "/etc": False,                  # Changed to False to avoid permission errors
+    "/var/www": True,               # /var/www contains website files
+    "/home": True,                  # /home contains user directories
+    "/usr/local/bin": True,         # /usr/local/bin contains custom scripts
 }
-CHOSENNAME = os.uname()[1]
+
+# Backup Destination Configuration
+CHOSENNAME = os.uname()[1]  # Using hostname as identifier
 DATE = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
+SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))  # Directory where the script is executed
 LOCAL_BACKUP_DIR = os.path.join(SCRIPT_DIR, "rclone_backup_to_onedrive_backups")
 DAILY_BACKUP_DIR = f"onedrive:/backups/{CHOSENNAME}/daily"
 WEEKLY_BACKUP_DIR = f"onedrive:/backups/{CHOSENNAME}/weekly"
 MONTHLY_BACKUP_DIR = f"onedrive:/backups/{CHOSENNAME}/monthly"
 
-# Updated retention periods
-DAILY_RETENTION = 7      # Keep daily backups for 7 days
-WEEKLY_RETENTION = 28    # Keep weekly backups for 4 weeks
-MONTHLY_RETENTION = 365  # Keep monthly backups for 12 months
+# Retention Periods Configuration
+DAILY_RETENTION = 7  # Keep daily backups for 7 days
+WEEKLY_RETENTION = 28  # Keep weekly backups for 4 weeks (28 days)
+MONTHLY_RETENTION = 365  # Keep monthly backups for 12 months (365 days)
 
+# Backup File Name Configuration
 BACKUP_FILENAME = f"{DATE}-{CHOSENNAME}.tar.gz"
-MAX_LOCAL_BACKUPS = 0
+
+# Local Backup Configuration
+MAX_LOCAL_BACKUPS = 0  # Default to 0 to keep no local backups after successful transfer
+
+############################
+# SCRIPT LOGIC             #
+############################
 
 # Create local backup directory if it does not exist
 os.makedirs(LOCAL_BACKUP_DIR, exist_ok=True)
@@ -105,6 +122,7 @@ os.makedirs(LOCAL_BACKUP_DIR, exist_ok=True)
 def check_rclone_config():
     """Check if rclone is configured correctly for OneDrive."""
     try:
+        # Log rclone version for debugging
         run_command("rclone version")
         result = subprocess.run(f"rclone --config {RCLONE_CONFIG_PATH} listremotes", shell=True, text=True, capture_output=True, check=True)
         if "onedrive:" not in result.stdout:
@@ -114,6 +132,7 @@ def check_rclone_config():
         logger.error(f"Failed to check rclone configuration: {e.stderr}")
         exit(1)
 
+# Function to execute shell commands and log output
 def run_command(command):
     """Run a system command and log the output."""
     try:
@@ -125,6 +144,7 @@ def run_command(command):
         logger.error(f"Command '{command}' failed with error: {e.stderr}")
         return False
 
+# Function to create a tarball of specified paths
 def create_tarball(backup_filename, backup_paths, exclude_dir):
     """Create a tarball of the specified directories, excluding the local backups directory."""
     try:
@@ -146,6 +166,7 @@ def create_tarball(backup_filename, backup_paths, exclude_dir):
         logger.error(f"Failed to create backup {backup_filename}: {e}")
         raise e
 
+# Function to manage local backups
 def manage_local_backups(backup_dir, max_backups):
     """Ensure no more than the maximum number of backups are kept locally."""
     try:
@@ -163,6 +184,7 @@ def manage_local_backups(backup_dir, max_backups):
         logger.error(f"Failed to manage local backups: {e}")
         raise e
 
+# Function to perform rclone operations
 def rclone_operation(operation, source, destination, retry=3, delay=5):
     """Perform an rclone operation and handle errors."""
     try:
@@ -170,7 +192,7 @@ def rclone_operation(operation, source, destination, retry=3, delay=5):
         logger.info(f"Executing rclone command: {command}")
         for attempt in range(retry):
             if run_command(command):
-                time.sleep(2)
+                time.sleep(2)  # Add a small delay to ensure the operation completes
                 return True
             logger.warning(f"Attempt {attempt + 1} for {operation} failed. Retrying in {delay} seconds...")
             time.sleep(delay)
@@ -179,58 +201,51 @@ def rclone_operation(operation, source, destination, retry=3, delay=5):
         logger.error(f"Failed to {operation} from {source} to {destination}: {e}")
         return False
 
-def keep_latest_daily_backup(remote_path):
-    """Keep only the latest backup on OneDrive for each day."""
+# Function to delete backups older than retention periods
+def cleanup_remote_backups(retention_days, backup_dir):
+    """Cleanup remote backups older than the specified retention period."""
     try:
-        result = subprocess.run(f"rclone --config {RCLONE_CONFIG_PATH} lsf {remote_path}", shell=True, text=True, capture_output=True, check=True)
-        backups = sorted(result.stdout.splitlines())
-        latest_backup = None
+        run_command(f"rclone --config {RCLONE_CONFIG_PATH} delete {backup_dir} --min-age {retention_days}d")
+        logger.info(f"Cleaned up backups older than {retention_days} days in {backup_dir}.")
+    except Exception as e:
+        logger.error(f"Failed to clean up backups: {e}")
 
-        for backup in backups:
-            backup_date = backup.split('-')[0]
-            if latest_backup is None or backup_date != latest_backup.split('-')[0]:
-                latest_backup = backup
-            else:
-                run_command(f"rclone --config {RCLONE_CONFIG_PATH} deletefile {remote_path}/{backup}")
-                logger.info(f"Deleted older backup of the same day: {backup}")
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Failed to clean up backups on OneDrive: {e.stderr}")
-
-# Main script logic
+# Check if rclone is configured properly
 check_rclone_config()
-check_onedrive_access()
 
-rclone_operation("mkdir", "", DAILY_BACKUP_DIR)
-rclone_operation("mkdir", "", WEEKLY_BACKUP_DIR)
-rclone_operation("mkdir", "", MONTHLY_BACKUP_DIR)
-
+# Manage local backups before creating a new one
 manage_local_backups(LOCAL_BACKUP_DIR, MAX_LOCAL_BACKUPS)
+
+# Create tarball of the backup sources, excluding the local backups directory
 backup_filepath = os.path.join(LOCAL_BACKUP_DIR, BACKUP_FILENAME)
 create_tarball(backup_filepath, BACKUP_PATHS, exclude_dir=LOCAL_BACKUP_DIR)
 
+# Sync local backups to OneDrive with date-based versioning
 if rclone_operation("copy", backup_filepath, DAILY_BACKUP_DIR):
+    # Delete local backup after successful transfer
     if os.path.exists(backup_filepath):
         try:
             os.remove(backup_filepath)
             logger.info(f"Backup transferred successfully, deleting local backup: {backup_filepath}")
+            # If MAX_LOCAL_BACKUPS is 0, remove all remaining local backups
             if MAX_LOCAL_BACKUPS == 0:
                 manage_local_backups(LOCAL_BACKUP_DIR, MAX_LOCAL_BACKUPS)
         except Exception as e:
             logger.error(f"Failed to delete local backup: {e}")
-    keep_latest_daily_backup(DAILY_BACKUP_DIR)
 else:
     logger.error("Backup transfer to OneDrive failed. Keeping local backup.")
 
-# Move backups based on the schedule
-if datetime.datetime.now().weekday() == 6:  # Move to weekly on Sunday
+# Promote daily backups to weekly if today is Sunday
+if datetime.datetime.now().weekday() == 6:  # Sunday is the 6th day
     rclone_operation("move", DAILY_BACKUP_DIR, WEEKLY_BACKUP_DIR)
 
-if datetime.datetime.now().day == 1:  # Move to monthly on the first of the month
+# Promote weekly backups to monthly if today is the first of the month
+if datetime.datetime.now().day == 1:  # First day of the month
     rclone_operation("move", WEEKLY_BACKUP_DIR, MONTHLY_BACKUP_DIR)
 
-# Cleanup old backups according to retention policies
-rclone_operation("delete", f"--min-age {DAILY_RETENTION}d", DAILY_BACKUP_DIR)
-rclone_operation("delete", f"--min-age {WEEKLY_RETENTION}d", WEEKLY_BACKUP_DIR)
-rclone_operation("delete", f"--min-age {MONTHLY_RETENTION}d", MONTHLY_BACKUP_DIR)
+# Cleanup remote backups older than retention periods
+cleanup_remote_backups(DAILY_RETENTION, DAILY_BACKUP_DIR)
+cleanup_remote_backups(WEEKLY_RETENTION, WEEKLY_BACKUP_DIR)
+cleanup_remote_backups(MONTHLY_RETENTION, MONTHLY_BACKUP_DIR)
 
 logger.info("Backup script completed.")
