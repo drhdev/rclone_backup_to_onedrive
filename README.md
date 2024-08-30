@@ -53,7 +53,27 @@
    cd rclone_backup_to_onedrive
    ```
 
-5. **Set Up a Cron Job to Run This Script Automatically:**
+5. **Test rclone configuration:**
+
+   Run any of the folloeing rclone commands to check if the configuration works:
+   ```bash
+   rclone lsd onedrive:
+   rclone ls onedrive:
+   rclone lsf onedrive: --recursive
+   ```
+
+   You can also try to copy a testfile to OneDrive via rclone:
+   ```bash
+   echo "Test File" > test.txt
+   rclone copy test.txt onedrive:/test/
+   ```
+
+   Then use the following command to check if it worked:
+   ```bash
+   rclone lsf onedrive:/test/
+   ```
+
+7. **Set Up a Cron Job to Run This Script Automatically:**
 
    For example, to run the backup daily at 2 am, add the following line to your crontab:
    ```bash
