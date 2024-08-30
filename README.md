@@ -73,6 +73,11 @@
    rclone lsf onedrive:/test/
    ```
 
+   If the script cannot says that the rclone configuration for onedrive cannot be found, check the path of the rclone.config file and adjust accordingly (e.g. when using snap in Ubuntu 24.04 instead of manual configuration above):
+   ```bash
+   rclone config file
+   ``` 
+
 7. **Set Up a Cron Job to Run This Script Automatically:**
 
    For example, to run the backup daily at 2 am, add the following line to your crontab:
