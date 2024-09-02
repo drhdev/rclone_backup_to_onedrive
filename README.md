@@ -101,6 +101,97 @@ The script can be configured to match your specific backup needs:
 4. **Maximum Local Backups:**
    Set `MAX_LOCAL_BACKUPS` to specify the maximum number of local backups to keep. Set to `0` to not keep any local backups after transfer.
 
+## **Restoration **
+
+This guide provides step-by-step instructions to restore backups created by the `rclone_backup_to_onedrive.py` script. These steps will help you retrieve backups from OneDrive, extract the data, and ensure the correct permissions and ownership are restored on your server.
+
+### **1. Prerequisites**
+
+Before starting the restoration process, ensure the following:
+
+- You have `rclone` installed and configured with access to OneDrive.
+- You have permissions to write to the directories you intend to restore.
+- You have `tar` installed on your system for extracting the backups.
+
+### **2. Restoring Backup Files from OneDrive**
+
+#### **Step 1: List Available Backups**
+
+Use `rclone` to list the available backups in your OneDrive. Replace `<backup_directory>` with the path you used in the script (`daily`, `weekly`, or `monthly`):
+
+```bash
+rclone lsf onedrive:/backups/<hostname>/<backup_directory>/
+```
+
+Example:
+
+```bash
+rclone lsf onedrive:/backups/server1/daily/
+```
+
+#### **Step 2: Download the Desired Backup**
+
+Choose the specific backup file you want to restore and download it to your local machine or server. Replace `<backup_name>` with the actual backup file name you listed in the previous step:
+
+```bash
+rclone copy onedrive:/backups/<hostname>/<backup_directory>/<backup_name> /local/restore/path
+```
+
+Example:
+
+```bash
+rclone copy onedrive:/backups/server1/daily/20230903093000-server1.tar.gz /home/user/restore/
+```
+
+### **3. Extract the Backup**
+
+After downloading the backup file, extract its contents using the `tar` command. Ensure you specify the correct path where the backup should be restored:
+
+```bash
+tar -xzf /local/restore/path/<backup_name> -C /target/restore/path
+```
+
+Example:
+
+```bash
+tar -xzf /home/user/restore/20230903093000-server1.tar.gz -C /
+```
+
+**Note**: Using `-C /` will extract the contents directly to the root filesystem, replicating the original paths. Ensure the target path does not overwrite important data unless intended.
+
+### **4. Restoring File Permissions and Ownership**
+
+`tar` preserves file permissions, ownership, and symlinks by default, but if you want to ensure this explicitly, you can use:
+
+```bash
+tar --preserve-permissions --preserve-order -xzf /local/restore/path/<backup_name> -C /target/restore/path
+```
+
+### **5. Verify Restored Files**
+
+It's crucial to verify the restored files to ensure the restoration was successful and data integrity is maintained:
+
+- **Check File Integrity**: Manually check key files or use file checksums if available.
+- **Check Permissions and Ownership**: Use `ls -l` to verify that files have the correct permissions.
+
+Example:
+
+```bash
+ls -l /target/restore/path/etc
+```
+
+### **6. Additional Considerations**
+
+- **Extended Attributes**: If your environment uses ACLs, SELinux contexts, or other extended attributes, ensure these attributes are correctly restored. 
+- **Testing**: Always test the restoration process in a safe environment before performing on a production server.
+- **Automated Restore**: Consider scripting these steps if you frequently need to restore backups or plan to include restoration as part of a disaster recovery plan.
+
+### **7. Troubleshooting Common Issues**
+
+- **Permission Denied Errors**: Ensure you are running the commands with the necessary privileges, e.g., as `root` or using `sudo`.
+- **`rclone` Configuration Issues**: Re-run `rclone config reconnect onedrive:` if access to OneDrive is problematic.
+- **File Not Found**: Double-check paths and file names, ensuring the correct case sensitivity.
+
 ## Requirements
 
 - Python 3
