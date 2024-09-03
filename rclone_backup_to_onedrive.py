@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # rclone_backup_to_onedrive.py
-# Version: 1.4
+# Version: 1.4.1
 # Author: drhdev
 # License: GPL v3
 # Description: This script automates the backup process to Microsoft OneDrive using `rclone`. It creates compressed tarballs of specified directories and uploads them to OneDrive with daily, weekly, and monthly retention policies.
@@ -34,6 +34,11 @@ if verbose:
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
+
+# Set the path for rclone installed via Snap
+RCLONE_PATH = "/snap/bin/rclone"  # Default path for rclone installed via Snap
+# For GitHub installation (apt), the path would be: "/usr/bin/rclone"
+# Install via apt: sudo apt install rclone
 
 # Backup Sources Configuration
 # Add the local backup directory to the excluded paths to avoid recursive backups
@@ -76,8 +81,8 @@ os.makedirs(LOCAL_BACKUP_DIR, exist_ok=True)
 def check_rclone_config():
     """Check if rclone is configured correctly for OneDrive."""
     try:
-        run_command("rclone version")
-        result = subprocess.run("rclone listremotes", shell=True, text=True, capture_output=True, check=True)
+        run_command(f"{RCLONE_PATH} version")
+        result = subprocess.run(f"{RCLONE_PATH} listremotes", shell=True, text=True, capture_output=True, check=True)
         if "onedrive:" not in result.stdout:
             logger.error("Rclone is not configured for 'onedrive'. Please run 'rclone config' to set it up.")
             exit(1)
@@ -138,7 +143,7 @@ def manage_local_backups(backup_dir, max_backups):
 def rclone_operation(operation, source, destination, retry=3, delay=5):
     """Perform an rclone operation and handle errors."""
     try:
-        command = f"rclone {operation} {source} {destination}"
+        command = f"{RCLONE_PATH} {operation} {source} {destination}"
         logger.info(f"Executing rclone command: {command}")
         for attempt in range(retry):
             if run_command(command):
@@ -154,9 +159,9 @@ def rclone_operation(operation, source, destination, retry=3, delay=5):
 def check_onedrive_access():
     """Check if the OneDrive remote is accessible, and reconnect if necessary."""
     try:
-        if not run_command("rclone lsf onedrive:/"):
+        if not run_command(f"{RCLONE_PATH} lsf onedrive:/"):
             logger.warning("Unable to access OneDrive. Attempting to refresh the token.")
-            if not run_command("rclone config reconnect onedrive: --auto-confirm"):
+            if not run_command(f"{RCLONE_PATH} config reconnect onedrive: --auto-confirm"):
                 logger.error("Failed to reconnect to OneDrive. Ensure that rclone is set up correctly for non-interactive use.")
                 exit(1)
         time.sleep(2)
@@ -167,7 +172,7 @@ def check_onedrive_access():
 def keep_latest_daily_backup(remote_path):
     """Keep only the latest backup on OneDrive for each day."""
     try:
-        result = subprocess.run(f"rclone lsf {remote_path}", shell=True, text=True, capture_output=True, check=True)
+        result = subprocess.run(f"{RCLONE_PATH} lsf {remote_path}", shell=True, text=True, capture_output=True, check=True)
         backups = sorted(result.stdout.splitlines())
         latest_backup = None
 
@@ -176,7 +181,7 @@ def keep_latest_daily_backup(remote_path):
             if latest_backup is None or backup_date != latest_backup.split('-')[0]:
                 latest_backup = backup
             else:
-                run_command(f"rclone deletefile {remote_path}/{backup}")
+                run_command(f"{RCLONE_PATH} deletefile {remote_path}/{backup}")
                 logger.info(f"Deleted older backup of the same day: {backup}")
 
     except subprocess.CalledProcessError as e:
