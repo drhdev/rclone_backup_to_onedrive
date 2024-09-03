@@ -26,7 +26,7 @@
 
     If you do not want to use snap or if it is not available on your system you can also install (an older version) of `rclone` with:
     ```bash
-    sudo apt  install rclone
+    sudo apt install rclone
     ```
     This will download and install the latest version of `rclone` available with apt and you need to adjust the path to rclone in the script.
    
