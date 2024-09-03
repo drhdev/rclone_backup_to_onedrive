@@ -64,8 +64,17 @@
    python rclone_backup_to_onedrive.py -v
    ```
 
-   If an error occurs you most likely need to change the path to rclone (see details in the script). 
+   If an error occurs you most likely need to change the path to rclone which can be found out with:
+
+   ```bash
+   which rclone
+   ```
+
+   And changed in the script by editing:
    
+   ```bash
+   nano rclone_backup_to_onedrive.py
+   ```
 5. **Other Tests for rclone configuration:**
 
    Run any of the folloeing rclone commands to check if the configuration works:
