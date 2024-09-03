@@ -30,13 +30,25 @@
     ```
     This will download and install the latest version of `rclone` available with apt and you need to adjust the path to rclone in the script.
    
-3. **Configure `rclone` to Connect to Your OneDrive Account:**
+2. **Configure `rclone` to Connect to Your OneDrive Account:**
 
-    Run the following command to set up `rclone`:
-    ```bash
-    rclone config
-    ```
-    Follow the prompts to set up a new remote named `onedrive`. Ensure that `rclone` is configured for non-interactive use with the correct permissions and scopes.
+   Run the following command to set up `rclone`:
+   ```bash
+   rclone config
+   ```
+   Follow the prompts to set up a new remote named `onedrive`. Ensure that `rclone` is configured for non-interactive use with the correct permissions and scopes.
+
+   Test the connection to onedrive:
+   ```bash
+   rclone lsd onedrive:
+   ```
+3. **Download and Place the Script in the Project Directory:**
+
+   Clone the repository and navigate to the project directory:
+   ```bash
+   git clone https://github.com/drhdev/rclone_backup_to_onedrive.git
+   cd rclone_backup_to_onedrive
+   ```
 
 4. **Set Up a Python Virtual Environment (`venv`) in the Project Directory:**
 
@@ -50,16 +62,15 @@
    python3 -m venv venv
    source venv/bin/activate
    ```
+5. **Test the script manually:**
 
-5. **Download and Place the Script in the Project Directory:**
-
-   Clone the repository and navigate to the project directory:
    ```bash
-   git clone https://github.com/drhdev/rclone_backup_to_onedrive.git
-   cd rclone_backup_to_onedrive
+   python rclone_backup_to_onedrive.py -v
    ```
 
-6. **Test rclone configuration:**
+   If an error occurs you most likely need to change the path to rclone (see details in the script). 
+   
+5. **Other Tests for rclone configuration:**
 
    Run any of the folloeing rclone commands to check if the configuration works:
    ```bash
@@ -84,7 +95,7 @@
    rclone config file
    ``` 
 
-7. **Set Up a Cron Job to Run This Script Automatically:**
+6. **Set Up a Cron Job to Run This Script Automatically:**
 
    For example, to run the backup daily at 2 am, add the following line to your crontab:
    ```bash
