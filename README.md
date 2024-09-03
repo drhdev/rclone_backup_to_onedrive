@@ -46,17 +46,13 @@
 
    Clone the repository and navigate to the project directory:
    ```bash
+   cd /home/user/python/
    git clone https://github.com/drhdev/rclone_backup_to_onedrive.git
    cd rclone_backup_to_onedrive
    ```
 
 4. **Set Up a Python Virtual Environment (`venv`) in the Project Directory:**
 
-   Navigate to the project directory where you want to store the script (default: `/home/user/python/rclone_backup_to_onedrive`):
-   ```bash
-   mkdir -p /home/user/python/rclone_backup_to_onedrive
-   cd /home/user/python/rclone_backup_to_onedrive
-   ```
    Create and activate a virtual environment:
    ```bash
    python3 -m venv venv
