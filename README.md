@@ -18,7 +18,11 @@
 
 1. **Install or Upgrade `rclone` to the Latest Stable Version:**
 
-    Open the terminal and run the following commands to install or upgrade `rclone`:
+    Open the terminal and check if `rclone` is already installed:
+    ```bash
+    which rclone
+    ```
+    Run the following commands to install or upgrade `rclone`:
     ```bash
     sudo snap install rclone
     ```
@@ -30,7 +34,7 @@
     ```
     This will download and install the latest version of `rclone` available with apt and you need to adjust the path to rclone in the script.
    
-2. **Configure `rclone` to Connect to Your OneDrive Account:**
+3. **Configure `rclone` to Connect to Your OneDrive Account:**
 
    Run the following command to set up `rclone`:
    ```bash
@@ -42,7 +46,7 @@
    ```bash
    rclone lsd onedrive:
    ```
-3. **Download and Place the Script in the Project Directory:**
+4. **Download and Place the Script in the Project Directory:**
 
    Clone the repository and navigate to the project directory:
    ```bash
@@ -51,30 +55,24 @@
    cd rclone_backup_to_onedrive
    ```
 
-4. **Set Up a Python Virtual Environment (`venv`) in the Project Directory:**
+5. **Set Up a Python Virtual Environment (`venv`) in the Project Directory:**
 
    Create and activate a virtual environment:
    ```bash
    python3 -m venv venv
    source venv/bin/activate
    ```
-5. **Test the script manually:**
+6. **Test the script manually:**
 
-   ```bash
-   python rclone_backup_to_onedrive.py -v
-   ```
-
-   If an error occurs you most likely need to change the path to rclone which can be found out with:
-
-   ```bash
-   which rclone
-   ```
-
-   And changed in the script by editing:
-   
+   Change the script according to your setup by editing:
    ```bash
    nano rclone_backup_to_onedrive.py
    ```
+   Then run it with:
+    ```bash
+   python rclone_backup_to_onedrive.py -v
+   ```
+
 5. **Other Tests for rclone configuration:**
 
    Run any of the folloeing rclone commands to check if the configuration works:
