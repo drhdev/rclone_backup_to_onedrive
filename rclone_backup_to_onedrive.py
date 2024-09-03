@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # rclone_backup_to_onedrive.py
-# Version: 1.4.1
+# Version: 1.5
 # Author: drhdev
 # License: GPL v3
 # Description: This script automates the backup process to Microsoft OneDrive using `rclone`. It creates compressed tarballs of specified directories and uploads them to OneDrive with daily, weekly, and monthly retention policies.
@@ -35,13 +35,31 @@ if verbose:
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
 
-# Set the path for rclone installed via Snap
-RCLONE_PATH = "/snap/bin/rclone"  # Default path for rclone installed via Snap
-# For GitHub installation (apt), the path would be: "/usr/bin/rclone"
-# Install via apt: sudo apt install rclone
+# Function to find the rclone path dynamically
+def find_rclone_path():
+    """Find the path of the rclone executable, preferring Snap installation first."""
+    snap_path = "/snap/bin/rclone"
+    apt_path = "/usr/bin/rclone"
+    
+    # Check for Snap installation first
+    if os.path.exists(snap_path):
+        logger.info(f"Using rclone from Snap installation at {snap_path}")
+        return snap_path
+    # Check for apt installation
+    elif os.path.exists(apt_path):
+        logger.info(f"Using rclone from apt installation at {apt_path}")
+        return apt_path
+    else:
+        logger.error("Rclone is not installed. Please install and configure rclone first.")
+        print("\nRclone needs to be installed and configured. Use the following commands to install via Snap:\n")
+        print("sudo snap install rclone --classic")
+        print("rclone config")
+        exit(1)
+
+# Set the path for rclone dynamically
+RCLONE_PATH = find_rclone_path()
 
 # Backup Sources Configuration
-# Add the local backup directory to the excluded paths to avoid recursive backups
 LOCAL_BACKUP_DIR_NAME = "rclone_backup_to_onedrive_backups"
 LOCAL_BACKUP_DIR = os.path.join(BASE_DIR, LOCAL_BACKUP_DIR_NAME)
 
@@ -239,3 +257,4 @@ rclone_operation("delete", f"--min-age {MONTHLY_RETENTION}d", MONTHLY_BACKUP_DIR
 
 write_final_status(BACKUP_FILENAME, os.path.basename(__file__), status)
 logger.info("Backup script completed.")
+
