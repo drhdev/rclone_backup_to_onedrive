@@ -125,6 +125,12 @@ Installing `rclone` via Snap can cause compatibility issues with cron jobs due t
    ```
 
    - Ensure `rclone` is installed and reports its version without errors.
+  
+   ```bash   
+   sudo rclone selfupdate
+   ```
+   
+   - **Expected Output:** `NOTICE: Successfully updated rclone from version vx.xx.x to version vx.xx.x`
 
 ### 2. Configure `rclone` for OneDrive as Root
 
