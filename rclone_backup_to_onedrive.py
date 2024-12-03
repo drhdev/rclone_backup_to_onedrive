@@ -166,17 +166,16 @@ def check_onedrive_access():
 def create_tarball(backup_filename, backup_paths, exclude_dir):
     """Create a tarball of the specified directories, excluding the local backups directory."""
     try:
+        os.makedirs(exclude_dir, exist_ok=True)  # Ensure exclude_dir exists
         with tarfile.open(backup_filename, "w:gz") as tar:
             for path, should_backup in backup_paths.items():
                 if should_backup:
-                    if os.path.exists(path) and path != exclude_dir:
+                    if os.path.exists(path):
                         try:
                             tar.add(path, arcname=os.path.relpath(path, '/'))
                             logger.info(f"Added {path} to the backup.")
                         except PermissionError as pe:
                             logger.error(f"Permission denied while trying to add {path} to the backup: {pe}")
-                    elif path == exclude_dir:
-                        logger.info(f"Excluding {exclude_dir} from the backup.")
                     else:
                         logger.warning(f"Path {path} does not exist and will be skipped.")
         logger.info(f"Backup {backup_filename} created successfully.")
@@ -189,6 +188,7 @@ def create_tarball(backup_filename, backup_paths, exclude_dir):
 def manage_local_backups(backup_dir, max_backups):
     """Ensure no more than the maximum number of backups are kept locally."""
     try:
+        os.makedirs(backup_dir, exist_ok=True)  # Ensure backup_dir exists
         if max_backups == 0:
             local_backups = sorted([f for f in os.listdir(backup_dir) if f.endswith(".tar.gz")])
             for backup in local_backups:
@@ -210,11 +210,15 @@ def rclone_operation(operation, source, destination=None, retry=3, delay=5):
     try:
         command = [RCLONE_PATH, operation]
         if operation in ["delete", "deletefile"]:
-            command.extend(source.split())
+            if source:
+                command.extend(source.split())
+            else:
+                logger.error(f"Operation '{operation}' requires a source path.")
+                return False
         elif destination:
             command.extend([source, destination])
         else:
-            # For operations like mkdir where source might be empty
+            # For operations like mkdir where destination is the path
             command.append(source)
         
         logger.info(f"Executing rclone command: {' '.join(command)}")
@@ -291,9 +295,10 @@ def process_backup_config(config, config_filename):
     MONTHLY_BACKUP_DIR = onedrive_remote['monthly']
     
     # Create remote backup directories if they do not exist
-    rclone_operation("mkdir", "", DAILY_BACKUP_DIR)
-    rclone_operation("mkdir", "", WEEKLY_BACKUP_DIR)
-    rclone_operation("mkdir", "", MONTHLY_BACKUP_DIR)
+    # **Fixed the rclone_operation call by removing the empty source parameter**
+    rclone_operation("mkdir", DAILY_BACKUP_DIR)
+    rclone_operation("mkdir", WEEKLY_BACKUP_DIR)
+    rclone_operation("mkdir", MONTHLY_BACKUP_DIR)
     
     # Manage local backups based on max_local_backups
     LOCAL_BACKUP_DIR = os.path.join(BASE_DIR, 'rclone_backup_to_onedrive_backups')
@@ -355,9 +360,9 @@ def process_backup_config(config, config_filename):
                 latest_weekly_backup = weekly_backups[-1]
                 latest_weekly_backup_path = f"{WEEKLY_BACKUP_DIR}/{latest_weekly_backup}"
                 # Copy the latest weekly backup to create a monthly backup
-                rclone_copy_success = rclone_operation("copy", latest_weekly_backup_path, monthly_backup_filepath)
-                if rclone_copy_success:
-                    rclone_operation("copy", monthly_backup_filepath, MONTHLY_BACKUP_DIR)
+                shutil.copy2(latest_weekly_backup_path, monthly_backup_filepath)
+                backup_success = rclone_operation("copy", monthly_backup_filepath, MONTHLY_BACKUP_DIR)
+                if backup_success:
                     if os.path.exists(monthly_backup_filepath):
                         os.remove(monthly_backup_filepath)
                         logger.info(f"Monthly backup transferred successfully, deleting local backup: {monthly_backup_filepath}")
