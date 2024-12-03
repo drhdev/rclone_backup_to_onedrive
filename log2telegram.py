@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # log2telegram.py
-# Version: 1.0.0
+# Version: 0.4.1
 # Author: drhdev
 # License: GPLv3
 #
 # Description:
-# This script monitors the 'rclone_backup_to_onedrive.log' file for new FINAL_STATUS entries,
+# This script checks the 'rclone_backup_to_onedrive.log' file for new FINAL_STATUS entries,
 # sends them as formatted messages via Telegram, and then exits. It ensures
 # that only new entries are sent by tracking the last read position and inode.
 # Additionally, it introduces a configurable delay between sending multiple
@@ -26,8 +26,8 @@ from logging.handlers import RotatingFileHandler
 load_dotenv()
 
 # Configuration
-LOG_FILE_PATH = "rclone_backup_to_onedrive.log"  # Path to your log file
-STATE_FILE_PATH = "log_notifier_state.json"      # Path to store the state
+LOG_FILE_PATH = "rclone_backup_to_onedrive.log"  # Updated Path to your log file
+STATE_FILE_PATH = "log_notifier_state.json"  # Reverted Path to store the state
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
@@ -38,8 +38,8 @@ if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
     sys.exit(1)
 
 # Set up logging
-log_filename = 'log2telegram.log'
-logger = logging.getLogger('log2telegram.py')
+log_filename = 'log2telegram.log'  # Reverted log filename to original
+logger = logging.getLogger('log2telegram.py')  # Reverted logger name to original
 logger.setLevel(logging.DEBUG)
 handler = RotatingFileHandler(log_filename, maxBytes=5*1024*1024, backupCount=5)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -89,10 +89,8 @@ class LogState:
         except Exception as e:
             logger.error(f"Failed to save state file: {e}")
 
-# Compile regex for FINAL_STATUS detection (adjusted to new format)
-# New FINAL_STATUS format:
-# FINAL_STATUS | SUCCESS | Script: rclone_backup_to_onedrive.py | Host: hostname | Backup: config1.yaml | Timestamp: 2024-12-03 14:00:00
-FINAL_STATUS_PATTERN = re.compile(r'^FINAL_STATUS\s*\|\s*(\w+)\s*\|\s*Script:\s*(.+?)\s*\|\s*Host:\s*(.+?)\s*\|\s*Backup:\s*(.+?)\s*\|\s*Timestamp:\s*(.+)$', re.IGNORECASE)
+# Compile regex for FINAL_STATUS detection (flexible matching)
+FINAL_STATUS_PATTERN = re.compile(r'^FINAL_STATUS\s*\|', re.IGNORECASE)
 
 def send_telegram_message(message, retries=3, delay_between_retries=5):
     """
@@ -122,27 +120,37 @@ def send_telegram_message(message, retries=3, delay_between_retries=5):
     logger.error(f"Failed to send Telegram message after {retries} attempts.")
     return False
 
-def format_message(match):
+def format_message(raw_message):
     """
     Formats the raw FINAL_STATUS log entry into a Markdown message for Telegram.
     Example Input:
-        FINAL_STATUS | SUCCESS | Script: rclone_backup_to_onedrive.py | Host: hostname | Backup: config1.yaml | Timestamp: 2024-12-03 14:00:00
+        FINAL_STATUS | rclone_backup_to_onedrive.py | example.com | SUCCESS | hostname | 2024-12-02 13:32:34 | example.com-20241202133213 | 3 snapshots exist
     Example Output:
         *FINAL_STATUS*
-        *Status:* `SUCCESS`
         *Script:* `rclone_backup_to_onedrive.py`
-        *Host:* `hostname`
-        *Backup:* `config1.yaml`
-        *Timestamp:* `2024-12-03 14:00:00`
+        *Droplet:* `example.com`
+        *Status:* `SUCCESS`
+        *Hostname:* `hostname`
+        *Timestamp:* `2024-12-02 13:32:34`
+        *Snapshot:* `example.com-20241202133213`
+        *Total Snapshots:* `3 snapshots exist`
     """
-    status, script_name, host, backup, timestamp = match.groups()
+    parts = raw_message.split(" | ")
+    if len(parts) != 8:
+        logger.warning(f"Unexpected FINAL_STATUS format: {raw_message}")
+        return raw_message  # Return as is if format is unexpected
+
+    _, script_name, droplet_name, status, hostname, timestamp, snapshot_name, snapshot_info = parts
+
     formatted_message = (
         f"*FINAL_STATUS*\n"
-        f"*Status:* `{status}`\n"
         f"*Script:* `{script_name}`\n"
-        f"*Host:* `{host}`\n"
-        f"*Backup:* `{backup}`\n"
-        f"*Timestamp:* `{timestamp}`"
+        f"*Droplet:* `{droplet_name}`\n"
+        f"*Status:* `{status}`\n"
+        f"*Hostname:* `{hostname}`\n"
+        f"*Timestamp:* `{timestamp}`\n"
+        f"*Snapshot:* `{snapshot_name}`\n"
+        f"*Total Snapshots:* `{snapshot_info}`"
     )
     return formatted_message
 
@@ -177,21 +185,21 @@ def process_log(state: LogState, delay_between_messages: int):
                 original_line = line  # Keep the original line for debugging
                 line = line.strip()
 
-                # Check if the line matches the FINAL_STATUS pattern
-                match = FINAL_STATUS_PATTERN.match(line)
-                if match:
-                    final_status_entries.append((line_number, match))
-                else:
-                    logger.debug(f"Line {line_number}: No FINAL_STATUS entry found.")
-                    logger.debug(f"Processed Line {line_number}: {line}")  # Log the actual message content
+                # Check if the line starts with 'FINAL_STATUS |'
+                if not FINAL_STATUS_PATTERN.match(line):
+                    # Optionally, you can log this at a lower level or skip logging
+                    logger.debug(f"Line {line_number}: Skipping non-FINAL_STATUS line.")
+                    continue  # Skip lines without the expected FINAL_STATUS
+
+                final_status_entries.append((line_number, line))
 
             if final_status_entries:
                 logger.info(f"Detected {len(final_status_entries)} FINAL_STATUS entry(ies) to send.")
-                for idx, (line_number, match) in enumerate(final_status_entries, start=1):
+                for idx, (line_number, message) in enumerate(final_status_entries, start=1):
                     logger.debug(f"Line {line_number}: Detected FINAL_STATUS entry.")
-                    success = send_telegram_message(match)
+                    success = send_telegram_message(message)
                     if not success:
-                        logger.error(f"Failed to send Telegram message for line {line_number}: {line}")
+                        logger.error(f"Failed to send Telegram message for line {line_number}: {message}")
                     if idx < len(final_status_entries):
                         logger.debug(f"Waiting for {delay_between_messages} seconds before sending the next message.")
                         time.sleep(delay_between_messages)
@@ -226,3 +234,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
