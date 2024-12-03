@@ -1,0 +1,18 @@
+backup_name: "backup-config2"
+
+backup_paths:
+  /etc: true
+  /opt/data: true
+  /var/log: false
+
+onedrive_remote:
+  daily: "onedrive:/backups/hostname2/daily"
+  weekly: "onedrive:/backups/hostname2/weekly"
+  monthly: "onedrive:/backups/hostname2/monthly"
+
+retention:
+  daily_retention: 5
+  weekly_retention: 2
+  monthly_retention: 6
+
+max_local_backups: 0  # Keep last 0 local backups.
