@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # log2telegram.py
-# Version: 0.4.1
+# Version: 0.4.2
 # Author: drhdev
 # License: GPLv3
 #
@@ -89,8 +89,8 @@ class LogState:
         except Exception as e:
             logger.error(f"Failed to save state file: {e}")
 
-# Compile regex for FINAL_STATUS detection (flexible matching)
-FINAL_STATUS_PATTERN = re.compile(r'^FINAL_STATUS\s*\|', re.IGNORECASE)
+# Compile regex for FINAL_STATUS detection anywhere in the message
+FINAL_STATUS_PATTERN = re.compile(r'FINAL_STATUS\s*\|', re.IGNORECASE)
 
 def send_telegram_message(message, retries=3, delay_between_retries=5):
     """
@@ -124,33 +124,36 @@ def format_message(raw_message):
     """
     Formats the raw FINAL_STATUS log entry into a Markdown message for Telegram.
     Example Input:
-        FINAL_STATUS | rclone_backup_to_onedrive.py | example.com | SUCCESS | hostname | 2024-12-02 13:32:34 | example.com-20241202133213 | 3 snapshots exist
+        FINAL_STATUS | SUCCESS | Script: rclone_backup_to_onedrive.py | Host: pistar | Backup: daily-pistar-config2-20241203184347.tar.gz | Timestamp: 2024-12-03 18:43:58
     Example Output:
         *FINAL_STATUS*
-        *Script:* `rclone_backup_to_onedrive.py`
-        *Droplet:* `example.com`
         *Status:* `SUCCESS`
-        *Hostname:* `hostname`
-        *Timestamp:* `2024-12-02 13:32:34`
-        *Snapshot:* `example.com-20241202133213`
-        *Total Snapshots:* `3 snapshots exist`
+        *Script:* `rclone_backup_to_onedrive.py`
+        *Host:* `pistar`
+        *Backup:* `daily-pistar-config2-20241203184347.tar.gz`
+        *Timestamp:* `2024-12-03 18:43:58`
     """
     parts = raw_message.split(" | ")
-    if len(parts) != 8:
+    if len(parts) != 6:
         logger.warning(f"Unexpected FINAL_STATUS format: {raw_message}")
         return raw_message  # Return as is if format is unexpected
 
-    _, script_name, droplet_name, status, hostname, timestamp, snapshot_name, snapshot_info = parts
+    # Unpack the parts
+    _, status, script_info, host_info, backup_info, timestamp_info = parts
+
+    # Extract values after the colon and space
+    script_name = script_info.split(":", 1)[1].strip() if ":" in script_info else script_info
+    host = host_info.split(":", 1)[1].strip() if ":" in host_info else host_info
+    backup = backup_info.split(":", 1)[1].strip() if ":" in backup_info else backup_info
+    timestamp = timestamp_info.split(":", 1)[1].strip() if ":" in timestamp_info else timestamp_info
 
     formatted_message = (
         f"*FINAL_STATUS*\n"
-        f"*Script:* `{script_name}`\n"
-        f"*Droplet:* `{droplet_name}`\n"
         f"*Status:* `{status}`\n"
-        f"*Hostname:* `{hostname}`\n"
-        f"*Timestamp:* `{timestamp}`\n"
-        f"*Snapshot:* `{snapshot_name}`\n"
-        f"*Total Snapshots:* `{snapshot_info}`"
+        f"*Script:* `{script_name}`\n"
+        f"*Host:* `{host}`\n"
+        f"*Backup:* `{backup}`\n"
+        f"*Timestamp:* `{timestamp}`"
     )
     return formatted_message
 
@@ -185,13 +188,19 @@ def process_log(state: LogState, delay_between_messages: int):
                 original_line = line  # Keep the original line for debugging
                 line = line.strip()
 
-                # Check if the line starts with 'FINAL_STATUS |'
-                if not FINAL_STATUS_PATTERN.match(line):
-                    # Optionally, you can log this at a lower level or skip logging
-                    logger.debug(f"Line {line_number}: Skipping non-FINAL_STATUS line.")
-                    continue  # Skip lines without the expected FINAL_STATUS
+                # Split the log line into components
+                split_line = line.split(" - ", 3)  # Split into 4 parts: timestamp, script, level, message
+                if len(split_line) < 4:
+                    logger.warning(f"Malformed log line (less than 4 parts): {original_line.strip()}")
+                    continue  # Skip malformed lines
 
-                final_status_entries.append((line_number, line))
+                message_part = split_line[3].strip()  # The actual log message
+
+                if FINAL_STATUS_PATTERN.search(message_part):
+                    final_status_entries.append((line_number, message_part))
+                else:
+                    logger.debug(f"Line {line_number}: No FINAL_STATUS entry found.")
+                    logger.debug(f"Processed Line {line_number}: {message_part}")  # Log the actual message content
 
             if final_status_entries:
                 logger.info(f"Detected {len(final_status_entries)} FINAL_STATUS entry(ies) to send.")
@@ -234,4 +243,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
