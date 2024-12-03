@@ -263,15 +263,19 @@ The scripts rely on certain Python packages listed in `requirements.txt`.
      source venv/bin/activate
      ```
 
-2. **Install Dependencies Using `pip`:**
+2. **Install Dependencies Using `pip` with `sudo`:**
+
+   Since the virtual environment is located in a directory that requires root permissions, you need to install the packages with `sudo`.
 
    ```bash
-   pip install -r requirements.txt
+   sudo /opt/rclone_backup_to_onedrive/venv/bin/pip install -r requirements.txt
    ```
 
-   - This installs all necessary packages in the virtual environment.
+   - **Explanation:**
+     - **`sudo`**: Grants the necessary permissions to write to the `venv` directory.
+     - **Absolute Path to `pip`**: Ensures that you're using the `pip` associated with your virtual environment.
 
-   **Note:** The repository includes a `requirements.txt` file for easy installation of dependencies.
+   **Note:** Avoid using `sudo pip install` within a virtual environment unless necessary, as it can lead to permission issues. In this case, it's required because the `venv` directory is owned by `root`.
 
 ### 6. Configure Environment Variables
 
@@ -282,7 +286,7 @@ The scripts require Telegram credentials to send notifications. These are manage
 1. **Create and Edit the `.env` File:**
 
    ```bash
-   sudo nano /opt/rclone_backup_to_onedrive/env.example
+   sudo nano /opt/rclone_backup_to_onedrive/.env
    ```
 
 2. **Add Your Telegram Credentials:**
@@ -294,13 +298,7 @@ The scripts require Telegram credentials to send notifications. These are manage
    TELEGRAM_CHAT_ID=your_telegram_chat_id
    ```
 
-3. **Rename `.env.example` to `.env`:**
-
-   ```bash
-   sudo mv /opt/rclone_backup_to_onedrive/env.example /opt/rclone_backup_to_onedrive/.env
-   ```
-
-4. **Secure Your `.env` File:**
+3. **Secure Your `.env` File:**
 
    The `.env` file contains sensitive information. Ensure it's secured and not exposed publicly.
 
@@ -308,7 +306,7 @@ The scripts require Telegram credentials to send notifications. These are manage
    sudo chmod 600 /opt/rclone_backup_to_onedrive/.env
    ```
 
-5. **Add `.env` to `.gitignore` to Prevent Accidental Commits:**
+4. **Add `.env` to `.gitignore` to Prevent Accidental Commits:**
 
    ```bash
    echo ".env" | sudo tee -a /opt/rclone_backup_to_onedrive/.gitignore
@@ -688,7 +686,7 @@ ls -l /etc
 7. **Missing Dependencies:**
 
    - **Cause:** Python packages not installed.
-   - **Solution:** Ensure you are in the virtual environment and run `pip install -r requirements.txt`.
+   - **Solution:** Ensure you are in the virtual environment and run `sudo /opt/rclone_backup_to_onedrive/venv/bin/pip install -r requirements.txt`.
 
 8. **Script Execution Issues:**
 
@@ -703,10 +701,11 @@ This project is licensed under the **GNU General Public License v3.0**. See the 
 
 ---
 
-By following this comprehensive guide, even novice users can set up and run the `rclone_backup_to_onedrive.py` and `log2telegram.py` scripts with confidence. Configuring `rclone` for `root` ensures that backups and monitoring operate seamlessly without encountering permission-related issues, especially when running via `root` cron jobs. The scripts' flexibility and detailed logging make them robust solutions for automated backups and real-time monitoring via Telegram.
+By following this comprehensive guide, eveyone should be able to set up and run the `rclone_backup_to_onedrive.py` and `log2telegram.py` scripts with confidence. Configuring `rclone` for `root` ensures that backups and monitoring operate seamlessly without encountering permission-related issues, especially when running via `root` cron jobs. The scripts' flexibility and detailed logging make them robust solutions for automated backups and real-time monitoring via Telegram.
 
 For any issues, contributions, or feature requests, please visit the [GitHub repository](https://github.com/drhdev/rclone_backup_to_onedrive).
 
 ---
 
 **Happy Backing Up and Monitoring!**
+
