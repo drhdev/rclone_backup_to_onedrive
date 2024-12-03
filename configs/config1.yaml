@@ -1,0 +1,19 @@
+backup_name: "backup-config1"
+
+backup_paths:
+  /etc: false
+  /var/www: true
+  /home: true
+  /usr/local/bin: true
+
+onedrive_remote:
+  daily: "onedrive:/backups/hostname/daily"
+  weekly: "onedrive:/backups/hostname/weekly"
+  monthly: "onedrive:/backups/hostname/monthly"
+
+retention:
+  daily_retention: 7
+  weekly_retention: 4
+  monthly_retention: 12
+
+max_local_backups: 3  # Optional: Defaults to 0 if not specified.
