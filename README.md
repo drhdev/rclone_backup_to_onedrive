@@ -15,14 +15,23 @@
   - [3. Clone the Repository](#3-clone-the-repository)
   - [4. Set Up a Python Virtual Environment](#4-set-up-a-python-virtual-environment)
   - [5. Install Python Dependencies](#5-install-python-dependencies)
-  - [6. Test the Script Manually](#6-test-the-script-manually)
-  - [7. Set Up the Cron Job for Automated Backups](#7-set-up-the-cron-job-for-automated-backups)
+  - [6. Test the Scripts Manually](#6-test-the-scripts-manually)
+  - [7. Set Up Cron Jobs for Automated Backups and Monitoring](#7-set-up-cron-jobs-for-automated-backups-and-monitoring)
 - [Configuration](#configuration)
   - [YAML Configuration Files](#yaml-configuration-files)
   - [Example YAML Configurations](#example-yaml-configurations)
+  - [Creating Additional YAML Configurations](#creating-additional-yaml-configurations)
 - [Usage](#usage)
-  - [Manual Execution](#manual-execution)
-  - [Command-Line Arguments](#command-line-arguments)
+  - [Manual Execution of Backup Script](#manual-execution-of-backup-script)
+  - [Command-Line Arguments for Backup Script](#command-line-arguments-for-backup-script)
+- [Monitoring and Reporting with `log2telegram.py`](#monitoring-and-reporting-with-log2telegrampy)
+  - [Description](#description-1)
+  - [Installation and Setup](#installation-and-setup-1)
+  - [Usage](#usage-1)
+  - [Cron Job Integration](#cron-job-integration-1)
+    - [Running `log2telegram.py` Independently](#running-log2telegrampy-independently)
+    - [Integrating `log2telegram.py` with `rclone_backup_to_onedrive.py` in a Single Cron Job](#integrating-log2telegrampy-with-rclone_backup_to_onedrivepy-in-a-single-cron-job)
+    - [Example Cron Job Entries](#example-cron-job-entries)
 - [Restoration Guide](#restoration-guide)
 - [Troubleshooting](#troubleshooting)
 - [License](#license)
@@ -32,6 +41,8 @@
 ## Description
 
 `rclone_backup_to_onedrive.py` is a Python script that automates the backup process of specific directories to Microsoft OneDrive using `rclone`. It supports multiple backup configurations defined in YAML files, allowing for flexible and scalable backup solutions. The script creates compressed tarball backups, manages retention policies, and can be easily integrated with cron jobs for regular automated backups.
+
+Additionally, the repository includes `log2telegram.py`, a monitoring script that observes the backup log for `FINAL_STATUS` entries and sends real-time notifications to Telegram, ensuring you are promptly informed about the success or failure of your backup operations.
 
 ---
 
@@ -53,6 +64,10 @@
 - **Comprehensive Logging:**
   - Detailed logs for each step of every backup job.
   - `FINAL_STATUS` messages indicating `SUCCESS` or `FAILURE` for easy monitoring.
+
+- **Monitoring and Reporting:**
+  - `log2telegram.py` script monitors backup logs and sends notifications via Telegram.
+  - Immediate alerts on backup successes or failures for proactive management.
 
 - **Cron Compatibility:**
   - Designed to work seamlessly with cron jobs for automated scheduling.
@@ -236,7 +251,7 @@ Using a virtual environment is recommended to manage dependencies without affect
 
 ### 5. Install Python Dependencies
 
-The script relies on certain Python packages listed in `requirements.txt`.
+The scripts rely on certain Python packages listed in `requirements.txt`.
 
 #### Step-by-Step Guide:
 
@@ -258,9 +273,9 @@ The script relies on certain Python packages listed in `requirements.txt`.
 
    **Note:** The repository includes a `requirements.txt` file for easy installation of dependencies.
 
-### 6. Test the Script Manually
+### 6. Test the Scripts Manually
 
-Before scheduling automated backups, it's essential to verify that the script operates correctly.
+Before scheduling automated backups and monitoring, it's essential to verify that the scripts operate correctly.
 
 #### Step-by-Step Guide:
 
@@ -270,43 +285,54 @@ Before scheduling automated backups, it's essential to verify that the script op
    cd /home/user/rclone_backup_to_onedrive
    ```
 
-2. **Run the Script with Verbose Output:**
+2. **Run the Backup Script with Verbose Output:**
 
    ```bash
    python rclone_backup_to_onedrive.py -v
    ```
 
-   - **Notes:**
-     - Running the script from within the project directory ensures correct path references.
-     - The `-v` flag enables verbose output, displaying detailed logs in the terminal.
+   - **Options:**
+     - `-v` or `--verbose`: Enables verbose output, displaying detailed logs in the terminal.
 
 3. **Monitor the Output:**
 
    - The script will process the configurations and output logs to the console and the log file `rclone_backup_to_onedrive.log`.
 
-4. **Verify Backups on OneDrive:**
+4. **Run the Monitoring Script with Verbose Output:**
+
+   ```bash
+   python log2telegram.py -v
+   ```
+
+   - **Options:**
+     - `-v` or `--verbose`: Enables verbose output, displaying detailed logs in the terminal.
+
+5. **Verify Backups on OneDrive:**
 
    - Log in to your OneDrive account and navigate to the specified backup directories to ensure backups have been uploaded.
 
-### 7. Set Up the Cron Job for Automated Backups
+6. **Verify Telegram Notifications:**
 
-Automate the backup process by scheduling the script to run at desired intervals using cron.
+   - Check your Telegram chat for notifications sent by `log2telegram.py` regarding the backup status.
+
+### 7. Set Up Cron Jobs for Automated Backups and Monitoring
+
+Automate the backup and monitoring process by scheduling cron jobs to run the backup script and the monitoring script (`log2telegram.py`) at desired intervals.
 
 #### Step-by-Step Guide:
 
-1. **Determine the Absolute Path of the Script:**
+1. **Determine the Absolute Paths of the Scripts:**
 
-   ```bash
-   pwd
-   # Output example: /home/user/rclone_backup_to_onedrive
-   ```
+   Assume your project is located at `/home/user/rclone_backup_to_onedrive`.
 
-   - **Script Path:** `/home/user/rclone_backup_to_onedrive/rclone_backup_to_onedrive.py`
+   - **Backup Script Path:** `/home/user/rclone_backup_to_onedrive/rclone_backup_to_onedrive.py`
+   - **Monitoring Script Path:** `/home/user/rclone_backup_to_onedrive/log2telegram.py`
 
-2. **Ensure the Script is Executable:**
+2. **Ensure Both Scripts are Executable:**
 
    ```bash
    chmod +x rclone_backup_to_onedrive.py
+   chmod +x log2telegram.py
    ```
 
 3. **Edit the Root’s Crontab:**
@@ -317,28 +343,60 @@ Automate the backup process by scheduling the script to run at desired intervals
    sudo crontab -e
    ```
 
-4. **Add the Cron Job Entry:**
+4. **Add the Cron Job Entries:**
 
-   ```cron
-   0 4 * * * /home/user/rclone_backup_to_onedrive/venv/bin/python /home/user/rclone_backup_to_onedrive/rclone_backup_to_onedrive.py >> /var/log/rclone_backup_to_onedrive_cron.log 2>&1
-   ```
+   Below are examples of how to set up cron jobs to run both scripts. Adjust the schedule as needed.
 
-   - **Explanation:**
-     - `0 4 * * *`: Runs daily at 4:00 AM.
-     - `/home/user/rclone_backup_to_onedrive/venv/bin/python`: Path to the Python interpreter within the virtual environment.
-     - `/home/user/rclone_backup_to_onedrive/rclone_backup_to_onedrive.py`: Path to the backup script.
-     - `>> /var/log/rclone_backup_to_onedrive_cron.log 2>&1`: Redirects both `stdout` and `stderr` to a log file for monitoring.
+   - **Example 1: Run Both Scripts Daily at 4:00 AM with Multiple YAML Configurations**
+
+     ```cron
+     0 4 * * * /home/user/rclone_backup_to_onedrive/venv/bin/python /home/user/rclone_backup_to_onedrive/rclone_backup_to_onedrive.py config1.yaml config2.yaml -v && /home/user/rclone_backup_to_onedrive/venv/bin/python /home/user/rclone_backup_to_onedrive/log2telegram.py -v >> /var/log/rclone_backup_and_monitor_cron.log 2>&1
+     ```
+
+     - **Explanation:**
+       - `0 4 * * *`: Runs daily at 4:00 AM.
+       - Executes `rclone_backup_to_onedrive.py` with both `config1.yaml` and `config2.yaml` in verbose mode.
+       - Upon successful completion, immediately runs `log2telegram.py` in verbose mode to send notifications.
+       - Redirects both `stdout` and `stderr` to `/var/log/rclone_backup_and_monitor_cron.log` for monitoring.
+
+   - **Example 2: Run Both Scripts Hourly with All YAML Configurations**
+
+     ```cron
+     0 * * * * /home/user/rclone_backup_to_onedrive/venv/bin/python /home/user/rclone_backup_to_onedrive/rclone_backup_to_onedrive.py -v && /home/user/rclone_backup_to_onedrive/venv/bin/python /home/user/rclone_backup_to_onedrive/log2telegram.py -v >> /var/log/rclone_backup_and_monitor_cron.log 2>&1
+     ```
+
+     - **Explanation:**
+       - `0 * * * *`: Runs at the start of every hour.
+       - Executes the backup script with all YAML configurations in verbose mode.
+       - Immediately runs the monitoring script to send notifications.
+       - Logs output to `/var/log/rclone_backup_and_monitor_cron.log`.
+
+   - **Example 3: Run Both Scripts Multiple Times a Day with Different YAML Files**
+
+     ```cron
+     0 2,14 * * * /home/user/rclone_backup_to_onedrive/venv/bin/python /home/user/rclone_backup_to_onedrive/rclone_backup_to_onedrive.py config1.yaml -v && /home/user/rclone_backup_to_onedrive/venv/bin/python /home/user/rclone_backup_to_onedrive/log2telegram.py -v >> /var/log/rclone_backup_and_monitor_cron.log 2>&1
+     30 6,18 * * * /home/user/rclone_backup_to_onedrive/venv/bin/python /home/user/rclone_backup_to_onedrive/rclone_backup_to_onedrive.py config2.yaml -v && /home/user/rclone_backup_to_onedrive/venv/bin/python /home/user/rclone_backup_to_onedrive/log2telegram.py -v >> /var/log/rclone_backup_and_monitor_cron.log 2>&1
+     ```
+
+     - **Explanation:**
+       - **First Entry (`0 2,14 * * *`):** Runs daily at 2:00 AM and 2:00 PM.
+         - Executes the backup script with `config1.yaml` in verbose mode.
+         - Immediately runs the monitoring script to send notifications.
+       - **Second Entry (`30 6,18 * * *`):** Runs daily at 6:30 AM and 6:30 PM.
+         - Executes the backup script with `config2.yaml` in verbose mode.
+         - Immediately runs the monitoring script to send notifications.
+       - Both entries log output to `/var/log/rclone_backup_and_monitor_cron.log`.
 
 5. **Save and Exit:**
 
-   - The cron service will recognize and apply the new job automatically.
+   - After adding the cron job entries, save and exit the editor. The cron service will recognize and apply the new jobs automatically.
 
 6. **Verify Cron Job Execution:**
 
-   - After the scheduled time, check the cron log to ensure the script ran successfully.
+   - After the scheduled times, check the cron log to ensure the scripts ran successfully.
 
      ```bash
-     cat /var/log/rclone_backup_to_onedrive_cron.log
+     cat /var/log/rclone_backup_and_monitor_cron.log
      ```
 
    - Look for `FINAL_STATUS` messages indicating `SUCCESS` or `FAILURE` for each backup job.
@@ -403,7 +461,7 @@ The repository includes two demo YAML files:
    max_local_backups: 0
    ```
 
-### Customizing the YAML Configuration
+### Creating Additional YAML Configurations
 
 You can create additional YAML files in the `configs` directory to define more backup jobs. Below is the structure and explanations of each field.
 
@@ -464,54 +522,11 @@ max_local_backups: 3
   - Defaults to `0` if not specified, meaning no local backups are kept after transfer.
   - Set to a positive integer to retain that number of local backups.
 
-### Creating Additional YAML Configurations
-
-1. **Navigate to the `configs` Directory:**
-
-   ```bash
-   cd /home/user/rclone_backup_to_onedrive/configs
-   ```
-
-2. **Create a New YAML File:**
-
-   ```bash
-   nano my_backup.yaml
-   ```
-
-3. **Define Your Backup Configuration:**
-
-   ```yaml
-   backup_name: "my_custom_backup"
-
-   backup_paths:
-     /var/www: true
-     /home/user/documents: true
-     /etc: false
-     /opt/data: true
-
-   onedrive_remote:
-     daily: "onedrive:/backups/my_custom_backup/daily"
-     weekly: "onedrive:/backups/my_custom_backup/weekly"
-     monthly: "onedrive:/backups/my_custom_backup/monthly"
-
-   retention:
-     daily_retention: 10
-     weekly_retention: 5
-     monthly_retention: 12
-
-   max_local_backups: 2
-   ```
-
-4. **Save and Exit:**
-
-   - Press `CTRL + O` to save.
-   - Press `CTRL + X` to exit.
-
 ---
 
 ## Usage
 
-### Manual Execution
+### Manual Execution of Backup Script
 
 Run the script manually to perform backups immediately or to test configurations.
 
@@ -529,7 +544,7 @@ Run the script manually to perform backups immediately or to test configurations
    cd /home/user/rclone_backup_to_onedrive
    ```
 
-3. **Run the Script with Verbose Output:**
+3. **Run the Backup Script with Verbose Output:**
 
    ```bash
    python rclone_backup_to_onedrive.py -v
@@ -544,11 +559,25 @@ Run the script manually to perform backups immediately or to test configurations
    - Detailed logs are written to `rclone_backup_to_onedrive.log` in the project directory.
    - If running with `-v`, logs are also displayed in the terminal.
 
-5. **Verify Backups on OneDrive:**
+5. **Run the Monitoring Script with Verbose Output:**
+
+   ```bash
+   python log2telegram.py -v
+   ```
+
+   - **Options:**
+     - `-v` or `--verbose`: Enables verbose output, displaying detailed logs in the terminal.
+     - `-d` or `--delay`: (Optional) Delay in seconds between sending multiple Telegram messages (default: 10 seconds).
+
+6. **Verify Backups on OneDrive:**
 
    - Log in to your OneDrive account and navigate to the specified backup directories to ensure backups have been uploaded.
 
-### Command-Line Arguments
+7. **Verify Telegram Notifications:**
+
+   - Check your Telegram chat for notifications sent by `log2telegram.py` regarding the backup status.
+
+### Command-Line Arguments for Backup Script
 
 The script offers flexibility in how configurations are processed.
 
@@ -591,6 +620,200 @@ You can specify one or more YAML configuration files to execute. If no files are
 #### Running Without Specifying YAML Files
 
 If you run the script without specifying any YAML files, it will automatically execute all YAML configurations found in the `configs` directory in alphabetical order, introducing a 5-second pause between each backup job to prevent resource contention.
+
+---
+
+## Monitoring and Reporting with `log2telegram.py`
+
+### Description
+
+`log2telegram.py` is a Python script designed to monitor the backup log (`rclone_backup_to_onedrive.log`) for new `FINAL_STATUS` entries and send real-time notifications to a specified Telegram chat. This ensures that you are immediately informed about the success or failure of your backup operations, enabling proactive management and quick response to any issues.
+
+### Installation and Setup
+
+1. **Ensure `log2telegram.py` is Present:**
+
+   The `log2telegram.py` script should be located in the root of your repository or a designated scripts directory within your project.
+
+2. **Install Dependencies:**
+
+   Ensure that the required Python packages (`requests` and `python-dotenv`) are listed in your `requirements.txt`. Update your `requirements.txt` as follows:
+
+   ---
+
+   ## `requirements.txt`
+
+   ```plaintext
+   PyYAML>=6.0
+   requests>=2.25.1
+   python-dotenv>=0.15.0
+   ```
+
+   ---
+
+   **Explanation:**
+
+   - **`PyYAML>=6.0`**: For parsing YAML configuration files.
+   - **`requests>=2.25.1`**: For making HTTP requests to the Telegram API.
+   - **`python-dotenv>=0.15.0`**: For loading environment variables from a `.env` file.
+
+3. **Install Dependencies:**
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Set Up Environment Variables:**
+
+   Create a `.env` file in the project root (if not already present) and add your Telegram credentials:
+
+   ```bash
+   nano .env
+   ```
+
+   Add the following lines:
+
+   ```plaintext
+   TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+   TELEGRAM_CHAT_ID=your_telegram_chat_id
+   ```
+
+   **Replace `your_telegram_bot_token` and `your_telegram_chat_id` with your actual Telegram Bot Token and Chat ID.**
+
+5. **Secure Your `.env` File:**
+
+   The `.env` file contains sensitive information. Ensure it's secured and not exposed publicly.
+
+   ```bash
+   chmod 600 .env
+   ```
+
+   - **Add to `.gitignore` to prevent accidental commits:**
+
+     ```bash
+     echo ".env" >> .gitignore
+     ```
+
+### Usage
+
+#### Manual Execution
+
+Run the monitoring script manually to perform immediate checks and send notifications.
+
+```bash
+python log2telegram.py -v
+```
+
+- **Options:**
+  - `-v` or `--verbose`: Enables verbose output, displaying detailed logs in the terminal.
+  - `-d` or `--delay`: (Optional) Delay in seconds between sending multiple Telegram messages (default: 10 seconds).
+
+**Expected Behavior:**
+
+- The script reads new `FINAL_STATUS` entries from `rclone_backup_to_onedrive.log`.
+- Sends formatted messages to the specified Telegram chat.
+- Logs its actions in `log2telegram.log`.
+
+#### Command-Line Arguments
+
+1. **Run with Verbose Output:**
+
+   ```bash
+   python log2telegram.py -v
+   ```
+
+2. **Run with Custom Delay Between Messages:**
+
+   ```bash
+   python log2telegram.py -d 15
+   ```
+
+   - **Behavior:**
+     - Introduces a 15-second delay between sending multiple Telegram messages to avoid overwhelming the Telegram API.
+
+### Cron Job Integration
+
+You can run `log2telegram.py` independently or integrate it with the backup script in a single cron job to achieve immediate notifications upon backup completion.
+
+#### Running `log2telegram.py` Independently
+
+1. **Edit the User’s Crontab:**
+
+   ```bash
+   crontab -e
+   ```
+
+2. **Add the Cron Job Entry:**
+
+   To run the monitoring script every 10 minutes:
+
+   ```cron
+   */10 * * * * /home/user/rclone_backup_to_onedrive/venv/bin/python /home/user/rclone_backup_to_onedrive/log2telegram.py -v >> /var/log/log2telegram_cron.log 2>&1
+   ```
+
+   - **Explanation:**
+     - `*/10 * * * *`: Runs every 10 minutes.
+     - Executes `log2telegram.py` in verbose mode.
+     - Logs output to `/var/log/log2telegram_cron.log`.
+
+#### Integrating `log2telegram.py` with `rclone_backup_to_onedrive.py` in a Single Cron Job
+
+For immediate notification after each backup, you can chain the execution of both scripts in a single cron job. This ensures that as soon as the backup script completes, the monitoring script checks the log and sends the relevant Telegram notification.
+
+##### Example Cron Job Entries:
+
+1. **Run Both Scripts Daily at 4:00 AM with Multiple YAML Configurations**
+
+   ```cron
+   0 4 * * * /home/user/rclone_backup_to_onedrive/venv/bin/python /home/user/rclone_backup_to_onedrive/rclone_backup_to_onedrive.py config1.yaml config2.yaml -v && /home/user/rclone_backup_to_onedrive/venv/bin/python /home/user/rclone_backup_to_onedrive/log2telegram.py -v >> /var/log/rclone_backup_and_monitor_cron.log 2>&1
+   ```
+
+   - **Behavior:**
+     - Runs `rclone_backup_to_onedrive.py` with both `config1.yaml` and `config2.yaml` in verbose mode at 4:00 AM daily.
+     - Upon successful completion, immediately runs `log2telegram.py` in verbose mode to send notifications.
+     - Logs output to `/var/log/rclone_backup_and_monitor_cron.log`.
+
+2. **Run Both Scripts Hourly with All YAML Configurations**
+
+   ```cron
+   0 * * * * /home/user/rclone_backup_to_onedrive/venv/bin/python /home/user/rclone_backup_to_onedrive/rclone_backup_to_onedrive.py -v && /home/user/rclone_backup_to_onedrive/venv/bin/python /home/user/rclone_backup_to_onedrive/log2telegram.py -v >> /var/log/rclone_backup_and_monitor_cron.log 2>&1
+   ```
+
+   - **Behavior:**
+     - Runs `rclone_backup_to_onedrive.py` with all YAML configurations in verbose mode at the start of every hour.
+     - Immediately runs `log2telegram.py` to send notifications.
+     - Logs output to `/var/log/rclone_backup_and_monitor_cron.log`.
+
+3. **Run Both Scripts Multiple Times a Day with Different YAML Files**
+
+   ```cron
+   0 2,14 * * * /home/user/rclone_backup_to_onedrive/venv/bin/python /home/user/rclone_backup_to_onedrive/rclone_backup_to_onedrive.py config1.yaml -v && /home/user/rclone_backup_to_onedrive/venv/bin/python /home/user/rclone_backup_to_onedrive/log2telegram.py -v >> /var/log/rclone_backup_and_monitor_cron.log 2>&1
+   30 6,18 * * * /home/user/rclone_backup_to_onedrive/venv/bin/python /home/user/rclone_backup_to_onedrive/rclone_backup_to_onedrive.py config2.yaml -v && /home/user/rclone_backup_to_onedrive/venv/bin/python /home/user/rclone_backup_to_onedrive/log2telegram.py -v >> /var/log/rclone_backup_and_monitor_cron.log 2>&1
+   ```
+
+   - **Behavior:**
+     - **First Entry (`0 2,14 * * *`):** Runs daily at 2:00 AM and 2:00 PM.
+       - Executes the backup script with `config1.yaml` in verbose mode.
+       - Immediately runs the monitoring script to send notifications.
+     - **Second Entry (`30 6,18 * * *`):** Runs daily at 6:30 AM and 6:30 PM.
+       - Executes the backup script with `config2.yaml` in verbose mode.
+       - Immediately runs the monitoring script to send notifications.
+     - Both entries log output to `/var/log/rclone_backup_and_monitor_cron.log`.
+
+##### Expected Results:
+
+- **Backup Execution:**
+  - Backups are created as per the configurations defined in the YAML files.
+  - Compressed tarball backups are uploaded to the specified OneDrive directories.
+  - Local backups are managed based on retention policies.
+
+- **Monitoring Notifications:**
+  - After each backup operation, `log2telegram.py` scans `rclone_backup_to_onedrive.log` for new `FINAL_STATUS` entries.
+  - Sends formatted Telegram messages indicating the success or failure of each backup job.
+  - Messages include details such as script name, host, backup configuration, and timestamp.
+
+- **Logging:**
+  - All actions and any errors are logged to `/var/log/rclone_backup_and_monitor_cron.log` for auditing and troubleshooting purposes.
 
 ---
 
@@ -713,8 +936,8 @@ ls -l /etc
    - **Cause:** Incorrect cron job entry or script permissions.
    - **Solution:**
      - Ensure the cron job path is absolute.
-     - Verify that the script has executable permissions.
-     - Check the cron log file (`/var/log/rclone_backup_to_onedrive_cron.log`) for errors.
+     - Verify that the scripts have executable permissions.
+     - Check the cron log file (`/var/log/rclone_backup_and_monitor_cron.log` or `/var/log/log2telegram_cron.log`) for errors.
 
 4. **YAML Parsing Errors:**
 
@@ -749,10 +972,10 @@ This project is licensed under the **GNU General Public License v3.0**. See the 
 
 ---
 
-By following this comprehensive guide, even novice users can set up and run the `rclone_backup_to_onedrive` script with confidence. The script's flexibility and detailed logging make it a robust solution for automated backups to OneDrive.
+By following this comprehensive guide, even novice users can set up and run the `rclone_backup_to_onedrive.py` and `log2telegram.py` scripts with confidence. The scripts' flexibility and detailed logging make them robust solutions for automated backups and real-time monitoring via Telegram.
 
 For any issues, contributions, or feature requests, please visit the [GitHub repository](https://github.com/drhdev/rclone_backup_to_onedrive).
 
 ---
 
-**Happy Backing Up!**
+**Happy Backing Up and Monitoring!**
