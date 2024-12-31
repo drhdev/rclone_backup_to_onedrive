@@ -322,6 +322,8 @@ The scripts require Telegram credentials to send notifications. These are manage
    ```bash
    echo ".env" | sudo tee -a /opt/rclone_backup_to_onedrive/.gitignore
    ```
+5. **Configure the .yaml configurations to your needs in the config subfolder.**
+
 
 ### 7. Test the Scripts Manually
 
