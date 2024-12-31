@@ -324,6 +324,18 @@ The scripts require Telegram credentials to send notifications. These are manage
    ```
 5. **Configure the .yaml configurations to your needs in the config subfolder.**
 
+   ```bash
+   sudo nano /opt/rclone_backup_to_onedrive/config1.yaml
+   ```
+
+   ```plaintext
+   TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+   TELEGRAM_CHAT_ID=your_telegram_chat_id
+   ```
+
+   ```bash
+   sudo rm /opt/rclone_backup_to_onedrive/config2.yaml
+   ```
 
 ### 7. Test the Scripts Manually
 
