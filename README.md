@@ -131,9 +131,8 @@ Installing `rclone` via Snap can cause compatibility issues with cron jobs due t
    ```
    
    - **Expected Output:** `NOTICE: Successfully updated rclone from version vx.xx.x to version vx.xx.x`
-
-   - If you need to update `rclone` to the very latest version you do it with this command:
      
+   - If you need to update `rclone` to the very latest version you do it with this command:
    ```bash
      sudo curl -fsSL https://rclone.org/install.sh | sudo bash
    ```
