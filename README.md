@@ -132,6 +132,12 @@ Installing `rclone` via Snap can cause compatibility issues with cron jobs due t
    
    - **Expected Output:** `NOTICE: Successfully updated rclone from version vx.xx.x to version vx.xx.x`
 
+   - If you need to update `rclone` to the very latest version you do it with this command:
+     
+   ```bash
+     sudo curl -fsSL https://rclone.org/install.sh | sudo bash
+   ```
+
 ### 2. Configure `rclone` for OneDrive as Root
 
 Configuring `rclone` for OneDrive involves authorizing access to your OneDrive account. Since the backup scripts and cron jobs will run as `root`, it's essential to configure `rclone` for the `root` user to ensure seamless operation without permission issues.
