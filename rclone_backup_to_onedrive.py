@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # rclone_backup_to_onedrive.py
-# Version: 3.1
+# Version: 3.2
 # Author: drhdev
 # License: GPL v3
 # Description: Enhanced backup script with YAML-based configurations, improved retention policies, per-configuration local backup retention, and cron compatibility.
@@ -29,7 +29,9 @@ CONFIGS_DIR = os.path.join(BASE_DIR, 'configs')
 log_filename = os.path.join(BASE_DIR, 'rclone_backup_to_onedrive.log')
 logger = logging.getLogger('rclone_backup_to_onedrive.py')
 logger.setLevel(logging.DEBUG)
-handler = RotatingFileHandler(log_filename, maxBytes=5 * 1024 * 1024, backupCount=5)
+
+# Updated so the log file is rotated/overwritten at 1 MB total size, keeps only 1 backup
+handler = RotatingFileHandler(log_filename, maxBytes=1 * 1024 * 1024, backupCount=1)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 handler.setFormatter(formatter)
 logger.addHandler(handler)
@@ -295,7 +297,6 @@ def process_backup_config(config, config_filename):
     MONTHLY_BACKUP_DIR = onedrive_remote['monthly']
     
     # Create remote backup directories if they do not exist
-    # **Fixed the rclone_operation call by removing the empty source parameter**
     rclone_operation("mkdir", DAILY_BACKUP_DIR)
     rclone_operation("mkdir", WEEKLY_BACKUP_DIR)
     rclone_operation("mkdir", MONTHLY_BACKUP_DIR)
@@ -315,9 +316,7 @@ def process_backup_config(config, config_filename):
         if create_tarball(backup_filepath, backup_paths, exclude_dir=LOCAL_BACKUP_DIR):
             backup_success = rclone_operation("copy", backup_filepath, DAILY_BACKUP_DIR)
             if backup_success:
-                if os.path.exists(backup_filepath):
-                    os.remove(backup_filepath)
-                    logger.info(f"Backup transferred successfully, deleting local backup: {backup_filepath}")
+                # If daily upload succeeded, manage daily retention
                 manage_backups_by_count(DAILY_BACKUP_DIR, 'daily', retention.get('daily_retention', 7))
                 status = "success"
             else:
@@ -325,52 +324,72 @@ def process_backup_config(config, config_filename):
     except Exception as e:
         logger.error(f"Failed to complete the backup process for '{backup_name}': {e}")
     
-    # Rotate to Weekly Backup
-    current_weekday = datetime.datetime.now().weekday()
-    if current_weekday == 6:  # Sunday
-        weekly_backup_filename = get_backup_filename('weekly', backup_name)
-        weekly_backup_filepath = os.path.join(LOCAL_BACKUP_DIR, weekly_backup_filename)
-        try:
-            # Copy the latest daily backup to create a weekly backup
-            shutil.copy2(backup_filepath, weekly_backup_filepath)
-            backup_success = rclone_operation("copy", weekly_backup_filepath, WEEKLY_BACKUP_DIR)
-            if backup_success:
-                if os.path.exists(weekly_backup_filepath):
-                    os.remove(weekly_backup_filepath)
-                    logger.info(f"Weekly backup transferred successfully, deleting local backup: {weekly_backup_filepath}")
-                manage_backups_by_count(WEEKLY_BACKUP_DIR, 'weekly', retention.get('weekly_retention', 4))
-        except Exception as e:
-            logger.error(f"Failed to create weekly backup for '{backup_name}': {e}")
+    # If daily was successfully uploaded, attempt weekly/monthly rotation
+    if status == "success":
+        current_weekday = datetime.datetime.now().weekday()
+        current_day = datetime.datetime.now().day
+        
+        # Weekly Rotation (if Sunday == weekday 6)
+        if current_weekday == 6:
+            weekly_backup_filename = get_backup_filename('weekly', backup_name)
+            weekly_backup_filepath = os.path.join(LOCAL_BACKUP_DIR, weekly_backup_filename)
+            try:
+                # Copy the local daily tarball to create a weekly tarball
+                shutil.copy2(backup_filepath, weekly_backup_filepath)
+                weekly_success = rclone_operation("copy", weekly_backup_filepath, WEEKLY_BACKUP_DIR)
+                if weekly_success:
+                    if os.path.exists(weekly_backup_filepath):
+                        os.remove(weekly_backup_filepath)
+                        logger.info(f"Weekly backup transferred successfully, deleting local backup: {weekly_backup_filepath}")
+                    manage_backups_by_count(WEEKLY_BACKUP_DIR, 'weekly', retention.get('weekly_retention', 4))
+            except Exception as e:
+                logger.error(f"Failed to create weekly backup for '{backup_name}': {e}")
+        
+        # Monthly Rotation (if day==1)
+        if current_day == 1:
+            monthly_backup_filename = get_backup_filename('monthly', backup_name)
+            monthly_backup_filepath = os.path.join(LOCAL_BACKUP_DIR, monthly_backup_filename)
+            try:
+                # Find the latest weekly backup
+                result = subprocess.run(
+                    [RCLONE_PATH, "lsf", WEEKLY_BACKUP_DIR, "--files-only"],
+                    text=True,
+                    capture_output=True,
+                    check=True
+                )
+                weekly_backups = sorted(result.stdout.splitlines())
+                if weekly_backups:
+                    latest_weekly_backup = weekly_backups[-1]
+                    latest_weekly_backup_path = f"{WEEKLY_BACKUP_DIR}/{latest_weekly_backup}"
+                    # Copy the latest weekly backup from OneDrive to local for monthly rotation
+                    # Or you could do direct remote->remote copy if desired, but we'll stick to the local approach
+                    logger.info(f"Downloading latest weekly backup for monthly rotation: {latest_weekly_backup}")
+                    rclone_operation("copy", latest_weekly_backup_path, LOCAL_BACKUP_DIR)
+                    
+                    # Now that it's local, rename/copy it to monthly name
+                    downloaded_weekly_local = os.path.join(LOCAL_BACKUP_DIR, latest_weekly_backup)
+                    if os.path.exists(downloaded_weekly_local):
+                        shutil.copy2(downloaded_weekly_local, monthly_backup_filepath)
+                        
+                        monthly_success = rclone_operation("copy", monthly_backup_filepath, MONTHLY_BACKUP_DIR)
+                        if monthly_success:
+                            if os.path.exists(monthly_backup_filepath):
+                                os.remove(monthly_backup_filepath)
+                                logger.info(f"Monthly backup transferred successfully, deleting local backup: {monthly_backup_filepath}")
+                            manage_backups_by_count(MONTHLY_BACKUP_DIR, 'monthly', retention.get('monthly_retention', 12))
+                        # Clean up the downloaded weekly file
+                        if os.path.exists(downloaded_weekly_local):
+                            os.remove(downloaded_weekly_local)
+            except subprocess.CalledProcessError as e:
+                logger.error(f"Failed to list weekly backups for monthly rotation in '{backup_name}': {e.stderr.strip()}")
+            except Exception as e:
+                logger.error(f"Failed to create monthly backup for '{backup_name}': {e}")
     
-    # Rotate to Monthly Backup
-    current_day = datetime.datetime.now().day
-    if current_day == 1:  # First day of the month
-        monthly_backup_filename = get_backup_filename('monthly', backup_name)
-        monthly_backup_filepath = os.path.join(LOCAL_BACKUP_DIR, monthly_backup_filename)
-        try:
-            # Find the latest weekly backup
-            result = subprocess.run(
-                [RCLONE_PATH, "lsf", WEEKLY_BACKUP_DIR, "--files-only"],
-                text=True,
-                capture_output=True,
-                check=True
-            )
-            weekly_backups = sorted(result.stdout.splitlines())
-            if weekly_backups:
-                latest_weekly_backup = weekly_backups[-1]
-                latest_weekly_backup_path = f"{WEEKLY_BACKUP_DIR}/{latest_weekly_backup}"
-                # Copy the latest weekly backup to create a monthly backup
-                shutil.copy2(latest_weekly_backup_path, monthly_backup_filepath)
-                backup_success = rclone_operation("copy", monthly_backup_filepath, MONTHLY_BACKUP_DIR)
-                if backup_success:
-                    if os.path.exists(monthly_backup_filepath):
-                        os.remove(monthly_backup_filepath)
-                        logger.info(f"Monthly backup transferred successfully, deleting local backup: {monthly_backup_filepath}")
-                    manage_backups_by_count(MONTHLY_BACKUP_DIR, 'monthly', retention.get('monthly_retention', 12))
-        except subprocess.CalledProcessError as e:
-            logger.error(f"Failed to list weekly backups for monthly rotation in '{backup_name}': {e.stderr.strip()}")
-        except Exception as e:
-            logger.error(f"Failed to create monthly backup for '{backup_name}': {e}")
+    # Now that weekly/monthly rotation logic is done, remove the local daily tarball if daily was a success
+    if status == "success":
+        if os.path.exists(backup_filepath):
+            os.remove(backup_filepath)
+            logger.info(f"Daily backup transferred successfully; removing local backup: {backup_filepath}")
     
     write_final_status(backup_filename, os.path.basename(__file__), status)
     logger.info(f"Backup job '{backup_name}' completed with status: {status.upper()}")
@@ -440,4 +459,3 @@ if __name__ == "__main__":
     
     # Execute main function
     main()
-

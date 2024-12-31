@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 # log2telegram.py
-# Version: 0.4.2
+# Version: 0.4.3
 # Author: drhdev
 # License: GPLv3
 #
 # Description:
-# This script checks the 'rclone_backup_to_onedrive.log' file for new FINAL_STATUS entries,
-# sends them as formatted messages via Telegram, and then exits. It ensures
-# that only new entries are sent by tracking the last read position and inode.
-# Additionally, it introduces a configurable delay between sending multiple
-# Telegram messages to avoid overwhelming the Telegram API.
+# This script checks the 'rclone_backup_to_onedrive.log' file for any FINAL_STATUS entries
+# and sends only the single most recently timestamped FINAL_STATUS entry as a Telegram message.
+# It no longer tracks or remembers its last read position or inode; it simply reads the entire
+# log file every time it is run, finds the newest FINAL_STATUS by timestamp, and sends it.
 
 import os
 import sys
@@ -21,13 +20,13 @@ import re
 import time
 from dotenv import load_dotenv
 from logging.handlers import RotatingFileHandler
+from datetime import datetime
 
 # Load environment variables from .env if present
 load_dotenv()
 
 # Configuration
-LOG_FILE_PATH = "rclone_backup_to_onedrive.log"  # Updated Path to your log file
-STATE_FILE_PATH = "log_notifier_state.json"  # Reverted Path to store the state
+LOG_FILE_PATH = "rclone_backup_to_onedrive.log"  # Path to your log file
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
@@ -38,8 +37,8 @@ if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
     sys.exit(1)
 
 # Set up logging
-log_filename = 'log2telegram.log'  # Reverted log filename to original
-logger = logging.getLogger('log2telegram.py')  # Reverted logger name to original
+log_filename = 'log2telegram.log'
+logger = logging.getLogger('log2telegram.py')
 logger.setLevel(logging.DEBUG)
 handler = RotatingFileHandler(log_filename, maxBytes=5*1024*1024, backupCount=5)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -57,37 +56,6 @@ def setup_console_logging(verbose: bool):
         console_handler.setFormatter(console_formatter)
         logger.addHandler(console_handler)
         logger.debug("Console logging enabled.")
-
-class LogState:
-    """
-    Manages the state of the log file to track the last read position and inode.
-    """
-    def __init__(self, state_file):
-        self.state_file = state_file
-        self.inode = None
-        self.position = 0
-        self.load_state()
-
-    def load_state(self):
-        if os.path.exists(self.state_file):
-            try:
-                with open(self.state_file, 'r') as f:
-                    data = json.load(f)
-                    self.inode = data.get("inode")
-                    self.position = data.get("position", 0)
-                logger.debug(f"Loaded state: inode={self.inode}, position={self.position}")
-            except Exception as e:
-                logger.error(f"Failed to load state file: {e}")
-        else:
-            logger.debug("No existing state file found. Starting fresh.")
-
-    def save_state(self, inode, position):
-        try:
-            with open(self.state_file, 'w') as f:
-                json.dump({"inode": inode, "position": position}, f)
-            logger.debug(f"Saved state: inode={inode}, position={position}")
-        except Exception as e:
-            logger.error(f"Failed to save state file: {e}")
 
 # Compile regex for FINAL_STATUS detection anywhere in the message
 FINAL_STATUS_PATTERN = re.compile(r'FINAL_STATUS\s*\|', re.IGNORECASE)
@@ -124,19 +92,19 @@ def format_message(raw_message):
     """
     Formats the raw FINAL_STATUS log entry into a Markdown message for Telegram.
     Example Input:
-        FINAL_STATUS | SUCCESS | Script: rclone_backup_to_onedrive.py | Host: pistar | Backup: daily-pistar-config2-20241203184347.tar.gz | Timestamp: 2024-12-03 18:43:58
+        FINAL_STATUS | SUCCESS | Script: rclone_backup_to_onedrive.py | Host: pistar | Backup: daily-pistar-20241203184347.tar.gz | Timestamp: 2024-12-03 18:43:58
     Example Output:
         *FINAL_STATUS*
         *Status:* `SUCCESS`
         *Script:* `rclone_backup_to_onedrive.py`
         *Host:* `pistar`
-        *Backup:* `daily-pistar-config2-20241203184347.tar.gz`
+        *Backup:* `daily-pistar-20241203184347.tar.gz`
         *Timestamp:* `2024-12-03 18:43:58`
     """
     parts = raw_message.split(" | ")
     if len(parts) != 6:
         logger.warning(f"Unexpected FINAL_STATUS format: {raw_message}")
-        return raw_message  # Return as is if format is unexpected
+        return raw_message  # Return as-is if format is unexpected
 
     # Unpack the parts
     _, status, script_info, host_info, backup_info, timestamp_info = parts
@@ -157,10 +125,10 @@ def format_message(raw_message):
     )
     return formatted_message
 
-def process_log(state: LogState, delay_between_messages: int):
+def process_log():
     """
-    Processes the log file for new FINAL_STATUS entries and sends them via Telegram.
-    Introduces a delay between sending multiple messages to avoid overwhelming Telegram.
+    Reads the entire log file from start to finish, looking for FINAL_STATUS entries.
+    Only the one with the most recent (largest) timestamp is sent to Telegram.
     """
     if not os.path.exists(LOG_FILE_PATH):
         logger.error(f"Log file '{LOG_FILE_PATH}' does not exist.")
@@ -168,80 +136,71 @@ def process_log(state: LogState, delay_between_messages: int):
 
     try:
         with open(LOG_FILE_PATH, 'r') as f:
-            st = os.fstat(f.fileno())
-            current_inode = st.st_ino
-            if state.inode != current_inode:
-                # Log file has been rotated or is new
-                logger.info("Detected new log file or rotation. Resetting position.")
-                state.position = 0
-                state.inode = current_inode
-
-            f.seek(state.position)
             lines = f.readlines()
             if not lines:
-                logger.info("No new lines to process.")
+                logger.info("No lines found in the log file.")
                 return
 
-            logger.info(f"Processing {len(lines)} new line(s).")
-            final_status_entries = []
+            logger.info(f"Read {len(lines)} line(s) from the log file.")
+
+            latest_dt = None
+            latest_message = None
+
             for line_number, line in enumerate(lines, start=1):
                 original_line = line  # Keep the original line for debugging
                 line = line.strip()
 
-                # Split the log line into components
-                split_line = line.split(" - ", 3)  # Split into 4 parts: timestamp, script, level, message
+                # Split the log line into components: [timestamp, script, level, message]
+                split_line = line.split(" - ", 3)
                 if len(split_line) < 4:
                     logger.warning(f"Malformed log line (less than 4 parts): {original_line.strip()}")
-                    continue  # Skip malformed lines
+                    continue
 
-                message_part = split_line[3].strip()  # The actual log message
+                message_part = split_line[3].strip()
 
                 if FINAL_STATUS_PATTERN.search(message_part):
-                    final_status_entries.append((line_number, message_part))
+                    # Attempt to parse "Timestamp: YYYY-MM-DD HH:MM:SS"
+                    match = re.search(r"Timestamp:\s*([\d\-:\s]+)", message_part)
+                    if match:
+                        timestamp_str = match.group(1).strip()
+                        try:
+                            dt_value = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
+                            if latest_dt is None or dt_value > latest_dt:
+                                latest_dt = dt_value
+                                latest_message = message_part
+                            logger.debug(f"Line {line_number}: Found FINAL_STATUS with timestamp {timestamp_str}")
+                        except ValueError:
+                            logger.warning(f"Could not parse timestamp: {timestamp_str}")
+                    else:
+                        logger.debug(f"Line {line_number}: FINAL_STATUS found but no timestamp to compare.")
                 else:
                     logger.debug(f"Line {line_number}: No FINAL_STATUS entry found.")
-                    logger.debug(f"Processed Line {line_number}: {message_part}")  # Log the actual message content
+                    logger.debug(f"Processed Line {line_number}: {message_part}")
 
-            if final_status_entries:
-                logger.info(f"Detected {len(final_status_entries)} FINAL_STATUS entry(ies) to send.")
-                for idx, (line_number, message) in enumerate(final_status_entries, start=1):
-                    logger.debug(f"Line {line_number}: Detected FINAL_STATUS entry.")
-                    success = send_telegram_message(message)
-                    if not success:
-                        logger.error(f"Failed to send Telegram message for line {line_number}: {message}")
-                    if idx < len(final_status_entries):
-                        logger.debug(f"Waiting for {delay_between_messages} seconds before sending the next message.")
-                        time.sleep(delay_between_messages)
+            if latest_message:
+                logger.info("Sending only the single newest FINAL_STATUS entry.")
+                send_telegram_message(latest_message)
             else:
-                logger.info("No FINAL_STATUS entries detected to send.")
-
-            logger.info(f"Processed {len(final_status_entries)} FINAL_STATUS entry(ies).")
-
-            # Update the state with the current file position
-            state.position = f.tell()
-            state.inode = current_inode
-            state.save_state(state.inode, state.position)
+                logger.info("No FINAL_STATUS entries found to send.")
 
     except Exception as e:
-        logger.error(f"Error processing log file: {e}")
+        logger.error(f"Error reading or processing log file: {e}")
 
 def main():
     # Parse command-line arguments
-    parser = argparse.ArgumentParser(description="Monitor 'rclone_backup_to_onedrive.log' for FINAL_STATUS entries and send them to Telegram.")
+    parser = argparse.ArgumentParser(
+        description="Reads 'rclone_backup_to_onedrive.log' for FINAL_STATUS entries, sending only the most recent one to Telegram."
+    )
     parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output to the console.')
-    parser.add_argument('-d', '--delay', type=int, default=10, help='Delay in seconds between sending multiple Telegram messages (default: 10 seconds).')
+    parser.add_argument('-d', '--delay', type=int, default=10,
+                        help='Delay in seconds between sending multiple Telegram messages (if needed). Not crucial since only one message is sent.')
     args = parser.parse_args()
 
     # Set up console logging if verbose is enabled
     setup_console_logging(args.verbose)
 
-    # Initialize log state
-    state = LogState(STATE_FILE_PATH)
-
-    # Process the log file with the specified delay
-    process_log(state, delay_between_messages=args.delay)
+    # Process the entire log file (always from the beginning)
+    process_log()
 
 if __name__ == "__main__":
     main()
-
-
