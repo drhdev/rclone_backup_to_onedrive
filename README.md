@@ -322,19 +322,36 @@ The scripts require Telegram credentials to send notifications. These are manage
    ```bash
    echo ".env" | sudo tee -a /opt/rclone_backup_to_onedrive/.gitignore
    ```
-5. **Configure the .yaml configurations to your needs in the config subfolder.**
+5. **Configure the .yaml configurations to your needs in the configs subfolder and set a hostname in the path and delete unwanted .yaml dummy files.**
 
    ```bash
-   sudo nano /opt/rclone_backup_to_onedrive/config1.yaml
+   sudo nano /opt/rclone_backup_to_onedrive/configs/config1.yaml
    ```
 
    ```plaintext
-   TELEGRAM_BOT_TOKEN=your_telegram_bot_token
-   TELEGRAM_CHAT_ID=your_telegram_chat_id
+   backup_name: "backup-config1"
+
+   backup_paths:
+    /etc: false
+    /var/www: true
+    /home: true
+    /usr/local/bin: true
+  
+   onedrive_remote:
+    daily: "onedrive:/backups/hostname/daily"
+    weekly: "onedrive:/backups/hostname/weekly"
+    monthly: "onedrive:/backups/hostname/monthly"
+  
+   retention:
+    daily_retention: 7
+    weekly_retention: 4
+    monthly_retention: 12
+
+   max_local_backups: 3  # Optional: Defaults to 0 if not specified.
    ```
 
    ```bash
-   sudo rm /opt/rclone_backup_to_onedrive/config2.yaml
+   sudo rm /opt/rclone_backup_to_onedrive/configs/config2.yaml
    ```
 
 ### 7. Test the Scripts Manually
